@@ -1,9 +1,10 @@
-const button = document.querySelector("button");
+// rest params + reduce
+// const add = (...numbers: number[]) => {
+//   return numbers.reduce((prev, curr) => {
+//     return prev + curr;
+//   }, 0)
+// } 
 
-function clickHandler(message: string) {
-  console.log("Clicked! " + message);
+// const result = add(5, 10, 15, 20, 25, 30);
 
-}
-if(button) {
-  button.addEventListener("click", clickHandler.bind(null, 'All good'));
-}
+// console.log(result);
