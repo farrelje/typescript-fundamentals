@@ -1,107 +1,220 @@
-// Built-in generics
-const names: Array<string> = ["Farrel", "Gary"];
-// const p: Promise<string> = new Promise((resolve, reject) => {
-//   setTimeout(() => {
-//     resolve("Done");
-//   }, 2000)
-// })
+// Decorators
 
-// p.then( data => {
-//   console.log(data.split(""));
-// })
+// function Logger(constructor: Function) {
+//   console.log("Logging...")
+//   console.log(constructor);
+// }
 
-// Custom generics
-
-// Generics show that these objects will be of different types, unlike object
-// Used for when you don't care about anything other than that they will definitely be different
-// TypeScript is good at inferring the types this way
-// To constrain the types further, use extends
-function merge<T extends object, U extends object>(objA: T, objB: U) {
-  return Object.assign(objA, objB);
-}
-
-const mergedObj = merge({name: "Farrel"}, {age: "unknown"});
-console.log(mergedObj.name);
-
-
-// Let's make it more versatile: don't care much about what comes in, but it must have a length property
-interface Lengthy {
-  length: number;
-}
-
-function countAndDescribe<T extends Lengthy>(element: T): [T, string] {
-  let desc = "No value.";
-  if(element.length > 0) {
-    desc = `Length: ${element.length}`;
-  }
-  return [element, desc];
-}
-
-console.log(countAndDescribe(["Hi there!", "Cats", "Bananas"]));
-
-// Dependency generic: T is object type, and U is some sort of key from T
-function extractAndConvert<T extends object, U extends keyof T>(obj: T, key: U) {
-  return obj[key];
-}
-// Error - it's not a keyof
-// extractAndConvert({banana: "Farrel"}, "name");
-extractAndConvert({name: "Farrel"}, "name");
-
-// Generic storage class
-// Rather than having to create multiple versions or unions
-// we can dynamically create different versions to be resolved later
-// This gives us massive flexibility and type safety
-
-type Primitive = string | number | boolean;
-class DataStorage<T extends Primitive> {
-  private data: T[] = [];
-
-  addItem(item: T) {
-    return [...this.data, item];
-  }
-  removeItem(item: T) {
-    return this.data.filter(i => i !== item);
-  }
-
-  getItems() {
-    return [...this.data];
+// Decorator factory for more flexibility
+function Logger(logString: string) {
+  return function(constructor: Function) {
+    console.log(logString);
+    console.log(constructor);
   }
 }
 
-const textStorage = new DataStorage<string>();
-textStorage.addItem("Cats");
-// Nope:
-//textStorage.addItem(2);
-const numberStorage = new DataStorage<number>();
-numberStorage.addItem(2);
+function WithTemplate(template: string, hookId: string) {
 
-// However, falls apart a bit here, as functions are set up for primitives and primitive comparisons
-// Hence, we extend primitives to avoid this issue
-// const objStorage = new DataStorage<object>();
-// objStorage.addItem({name: "Farrel"});
+  // These changes allow the decorator to be used on an instatiated class 
+  // (not hugely useful and very complicated, but interesting)
+  return function<T extends {new(...args: any[]): { name: string} }>(originalConstructor: T) {
 
-// More built-ins
-interface CourseGoal {
+    // return and change a class
+    return class extends originalConstructor {
+      // skip allowed in TS - _
+      constructor(..._: any[]){
+        super();
+        console.log('Rendering template')
+        const hookEl = document.getElementById(hookId);
+        if(hookEl) {
+          hookEl.innerHTML = template;
+          hookEl.querySelector('h1')!.textContent = this.name;
+        }
+      }
+    }
+  }
+}
+
+// Execution is bottom-up: closest to class first
+@Logger("Logging person")
+@WithTemplate("<h1>My person object</h1>", "app")
+class Person {
+  name = "Farrel";
+
+  constructor(){
+    console.log("Creating...")
+  }
+}
+
+const pers = new Person();
+console.log(pers);
+
+/*
+  Property descriptors: vanilla JS
+  - tell you meta-info about the property, such as whether enumerable
+*/
+
+
+// Property decorator
+function Log(target: any, propertyName: string | Symbol) {
+  console.log('Property decorator');
+  console.log(target, propertyName);
+}
+
+// Accessor decorator
+function Log2(target: any, name: string, descriptor: PropertyDescriptor) {
+  console.log("Accessor decorator");
+  console.log(target, name, descriptor);
+} 
+
+// Method decorator - can return descriptors here
+function Log3(target: any, name: string | Symbol, descriptor: PropertyDescriptor){
+  console.log("Method decorator");
+  console.log(target, name, descriptor);
+}
+
+// Parameter decorator
+function Log4(target: any, name: string | Symbol, position: number) {
+  console.log("Parameter decorator");
+  console.log(target, name, position);
+}
+class Product {
+  @Log
   title: string;
-  description: string;
-  dueDate: Date;
+  private _price: number;
+  
+  @Log2
+  set price(val: number) {
+    if(val > 0) {
+      this._price = val;
+    } else {
+      throw new Error('Invalid price - must be positive.');
+    }
+    
+  }
+
+  constructor(t: string, p: number) {
+    this.title = t;
+    this._price = p;
+  }
+
+  @Log3
+  getPriceWithTax(@Log4 tax: number) {
+    return this._price * (1+tax);
+  }
 }
 
-function createCourseGoal(title: string, description: string, dueDate: Date): CourseGoal {
-  // Partial allows temporary optionally, e.g. here where building an object
-  let courseGoal: Partial<CourseGoal> = {};
-  courseGoal.title = title;
-  courseGoal.description = description;
-  courseGoal.dueDate = dueDate;
-  return courseGoal as CourseGoal;
+// Decorators will not be run multiple times - only when set up/defined
+const p1 = new Product("Book", 21);
+const p2 = new Product("Book", 25);
+
+function Autobind(_: any, _2: string | Symbol, descriptor: PropertyDescriptor) {
+  const originalMethod = descriptor.value;
+  const adjDescriptor: PropertyDescriptor = {
+    configurable: true,
+    enumerable: false,
+    get() {
+      // This will be triggered by the concrete object
+      // Will no longer be overwritten by the event listener
+      const boundFn = originalMethod.bind(this);
+      return boundFn;
+    }
+  }
+  return adjDescriptor;
+}
+class Printer {
+  message = "This works";
+
+  @Autobind
+  showMessage() {
+    console.log(this.message);
+  }
 }
 
-const names2: Readonly<string[]> = ["Dave", "Gavin"];
-// Now this won't work
-// names2.push("Cat");
+const printer = new Printer();
 
-// Summary: generics vs unions
-// - Unions: (string | number | boolean) [] would mean a MIXED array of any of these types, which isn't great
-//  ANY of these types are accepted
-// - Generics: T extends string | number | boolean
-//  This means, however, that you can only choose ONE in each instance, which is much better
+const button = document.querySelector('button')!;
+// Common issue: binding. Pointer to this won't be printer, so have to manually bind
+// button.addEventListener("click", printer.showMessage.bind(printer));
+
+// In this example, we fix the undefined issue with autobind, which returns a property descriptor
+button.addEventListener("click", printer.showMessage);
+
+
+// Validation decorators
+
+interface ValidatorConfig {
+  [property: string]: {
+    [validatableProp: string]: string[] // ['required', 'positive'] etc.
+  }
+}
+
+const registeredValidators: ValidatorConfig = {};
+
+function Required(target: any, propName: string) {
+  // Register class name as key
+  registeredValidators[target.constructor.name] = {
+      ...registeredValidators[target.constructor.name],
+      [propName]: [...(registeredValidators[target.constructor.name]?.[propName] ?? []), 'required']
+  };
+}
+
+function PositiveNumber(target: any, propName: string) {
+  registeredValidators[target.constructor.name] = {
+      ...registeredValidators[target.constructor.name],
+      [propName]: [...(registeredValidators[target.constructor.name]?.[propName] ?? []), 'positive']
+  };
+}
+
+function validate(obj: any) {
+  const objValidatorConfig = registeredValidators[obj.constructor.name];
+  if(!objValidatorConfig) {
+    // valid
+    return true;
+  }
+  let isValid = true;
+  // Loop over keys
+  for(const prop in objValidatorConfig) {
+    // values
+    for(const validator of objValidatorConfig[prop]) {
+      switch(validator) {
+        case "required":
+          isValid = isValid && !!obj[prop];
+          break;
+        case "positive":
+          isValid = isValid && obj[prop] > 0;
+          break;
+      }
+    }
+  }
+  return isValid;
+}
+class Course {
+  @Required
+  title: string;
+  @PositiveNumber
+  price: number;
+
+  constructor(t: string, p: number) {
+    this.title = t;
+    this.price = p;
+  }
+}
+
+const courseForm = document.querySelector('form')!;
+courseForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const titleEl = document.getElementById("title") as HTMLInputElement;
+  const priceEl = document.getElementById("price") as HTMLInputElement;
+  const title = titleEl.value;
+  const price = +priceEl.value;
+
+  const createdCourse = new Course(title, price);
+  if(!validate(createdCourse)) {
+    alert("Invalid input, please try again!");
+    return;
+  }
+  console.log(createdCourse);
+})
+
+// Great package: https://www.npmjs.com/package/class-validator
